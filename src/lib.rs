@@ -126,10 +126,15 @@ impl<'a> MessageDeserializer<'a> {
         self.capacity() - self.cursor
     }
 
+    /// Checks if the deserializer is empty
+    pub fn is_empty(&self) -> bool {
+        self.len() < 1
+    }
+
     /// Reads a byte from the buffer
     pub fn read_u8(&mut self) -> Result<u8, MessageError> {
-        if self.len() < 1 {
-            return Err(MessageError::Incomplete);
+        if self.is_empty() {
+            return Err(MessageError::Incomplete(1));
         }
 
         let value = self.buffer[self.cursor];
@@ -141,7 +146,7 @@ impl<'a> MessageDeserializer<'a> {
     /// Read a fixed constant time length slice of bytes from the buffer
     pub fn read_fixed<const LENGTH: usize>(&mut self) -> Result<[u8; LENGTH], MessageError> {
         if self.len() < LENGTH {
-            return Err(MessageError::Incomplete);
+            return Err(MessageError::Incomplete(LENGTH));
         }
 
         let mut buffer = [0u8; LENGTH];
@@ -168,8 +173,9 @@ impl<'a> MessageDeserializer<'a> {
     /// Reads a runtime known length of bytes from the buffer
     pub fn read_bytes(&mut self, length: usize) -> Result<&'a [u8], MessageError> {
         if self.len() < length {
-            return Err(MessageError::Incomplete);
+            return Err(MessageError::Incomplete(self.len()));
         }
+
         let value = &self.buffer[self.cursor..self.cursor + length];
         self.cursor += length;
         Ok(value)
@@ -187,13 +193,16 @@ pub struct TunnelMessageHeader {
     pub tunnel_id: u32,
 }
 
+/// Errors that can occur while decoding
 #[derive(Debug, Error)]
 pub enum MessageError {
+    /// Message type was unknown
     #[error("unknown message type")]
     UnknownMessageType,
 
-    #[error("message was incomplete")]
-    Incomplete,
+    /// Message didn't have enough bytes to fully parse
+    #[error("message wasn't long enough to read {0} bytes")]
+    Incomplete(usize),
 }
 
 impl TunnelMessageHeader {
